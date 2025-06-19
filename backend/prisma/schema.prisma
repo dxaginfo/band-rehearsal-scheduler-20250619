@@ -1,0 +1,222 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String           @id @default(uuid())
+  email            String           @unique
+  passwordHash     String
+  firstName        String
+  lastName         String
+  phone            String?
+  instrument       String?
+  profileImageUrl  String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  
+  // Relationships
+  bandMembers      BandMember[]
+  createdBands     Band[]           @relation("CreatedBy")
+  createdRehearsal Rehearsal[]      @relation("CreatedByUser")
+  createdSongs     Song[]           @relation("CreatedBySongUser")
+  createdSetlists  Setlist[]        @relation("CreatedBySetlistUser")
+  availability     Availability[]
+  attendance       Attendance[]
+  recordedAttendance Attendance[]   @relation("RecordedBy")
+
+  @@map("users")
+}
+
+model Band {
+  id          String       @id @default(uuid())
+  name        String
+  description String?
+  logoUrl     String?
+  createdById String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  
+  // Relationships
+  createdBy   User         @relation("CreatedBy", fields: [createdById], references: [id])
+  members     BandMember[]
+  rehearsals  Rehearsal[]
+  setlists    Setlist[]
+
+  @@map("bands")
+}
+
+model BandMember {
+  id        String    @id @default(uuid())
+  bandId    String
+  userId    String
+  role      String    // admin, member
+  joinedAt  DateTime  @default(now())
+  
+  // Relationships
+  band      Band      @relation(fields: [bandId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([bandId, userId])
+  @@map("band_members")
+}
+
+model Venue {
+  id            String      @id @default(uuid())
+  name          String
+  address       String?
+  city          String?
+  state         String?
+  postalCode    String?
+  country       String?
+  contactName   String?
+  contactPhone  String?
+  contactEmail  String?
+  notes         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  // Relationships
+  rehearsals    Rehearsal[]
+
+  @@map("venues")
+}
+
+model Rehearsal {
+  id                String              @id @default(uuid())
+  bandId            String
+  venueId           String?
+  title             String
+  description       String?
+  startTime         DateTime
+  endTime           DateTime
+  isRecurring       Boolean             @default(false)
+  recurrencePattern String?
+  createdById       String
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  // Relationships
+  band              Band                @relation(fields: [bandId], references: [id], onDelete: Cascade)
+  venue             Venue?              @relation(fields: [venueId], references: [id])
+  createdBy         User                @relation("CreatedByUser", fields: [createdById], references: [id])
+  availability      Availability[]
+  attendance        Attendance[]
+  setlists          RehearsalSetlist[]
+
+  @@map("rehearsals")
+}
+
+model Availability {
+  id           String    @id @default(uuid())
+  rehearsalId  String
+  userId       String
+  status       String    // available, unavailable, tentative
+  notes        String?
+  respondedAt  DateTime  @default(now())
+  
+  // Relationships
+  rehearsal    Rehearsal @relation(fields: [rehearsalId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([rehearsalId, userId])
+  @@map("availability")
+}
+
+model Attendance {
+  id           String    @id @default(uuid())
+  rehearsalId  String
+  userId       String
+  status       String    // present, absent, late
+  notes        String?
+  recordedById String
+  recordedAt   DateTime  @default(now())
+  
+  // Relationships
+  rehearsal    Rehearsal @relation(fields: [rehearsalId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recordedBy   User      @relation("RecordedBy", fields: [recordedById], references: [id])
+
+  @@unique([rehearsalId, userId])
+  @@map("attendance")
+}
+
+model Song {
+  id           String        @id @default(uuid())
+  title        String
+  artist       String?
+  duration     Int?          // in seconds
+  notes        String?
+  createdById  String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  
+  // Relationships
+  createdBy    User          @relation("CreatedBySongUser", fields: [createdById], references: [id])
+  setlistSongs SetlistSong[]
+
+  @@map("songs")
+}
+
+model Setlist {
+  id           String            @id @default(uuid())
+  name         String
+  bandId       String
+  createdById  String
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  
+  // Relationships
+  band         Band              @relation(fields: [bandId], references: [id], onDelete: Cascade)
+  createdBy    User              @relation("CreatedBySetlistUser", fields: [createdById], references: [id])
+  songs        SetlistSong[]
+  rehearsals   RehearsalSetlist[]
+
+  @@map("setlists")
+}
+
+model SetlistSong {
+  id          String   @id @default(uuid())
+  setlistId   String
+  songId      String
+  position    Int
+  notes       String?
+  
+  // Relationships
+  setlist     Setlist  @relation(fields: [setlistId], references: [id], onDelete: Cascade)
+  song        Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@unique([setlistId, songId])
+  @@map("setlist_songs")
+}
+
+model RehearsalSetlist {
+  rehearsalId String
+  setlistId   String
+  
+  // Relationships
+  rehearsal   Rehearsal @relation(fields: [rehearsalId], references: [id], onDelete: Cascade)
+  setlist     Setlist   @relation(fields: [setlistId], references: [id], onDelete: Cascade)
+
+  @@id([rehearsalId, setlistId])
+  @@map("rehearsal_setlists")
+}
+
+model Notification {
+  id           String   @id @default(uuid())
+  userId       String
+  rehearsalId  String?
+  type         String   // reminder, change, cancellation
+  message      String
+  isRead       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@map("notifications")
+}
